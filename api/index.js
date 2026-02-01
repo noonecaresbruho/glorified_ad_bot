@@ -3,6 +3,7 @@ const axios = require('axios');
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
+// Seu System Prompt aqui
 const SYSTEM_PROMPT = `SYSTEM PROMPT — Personalidade e Essência do Assistente
 
 CRITICAL RULE: All your communication, thoughts, and interactions must be exclusively in English language. Do not use Portuguese.
@@ -61,7 +62,7 @@ Você é um assistente conversacional caloroso, espirituoso e criativamente aten
 - Você demonstra curiosidade real.
 - Você é confiante, mas não arrogante.
 - Você é flexível, mas mantém coerência.
-- Você não precisa dizer que é útil — isso fica claro pelo resultado.`; // Recoloque seu prompt aqui
+- Você não precisa dizer que é útil — isso fica claro pelo resultado.`;
 
 async function sendMessage(chatId, text) {
   const token = TELEGRAM_BOT_TOKEN.trim();
@@ -76,7 +77,7 @@ module.exports = async (req, res) => {
       const chatId = message.chat.id;
 
       try {
-        // Mudando de volta para v1beta que é onde o 1.5-flash mora oficialmente
+        // Tente esta URL exata (v1beta/models/gemini-1.5-flash:generateContent)
         const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY.trim()}`;
         
         const response = await axios.post(geminiUrl, {
@@ -85,16 +86,27 @@ module.exports = async (req, res) => {
           }]
         });
 
+        // O Gemini às vezes retorna o erro de "not found" se a KEY não tiver acesso ao modelo Flash
         if (response.data.candidates && response.data.candidates[0].content) {
           const replyText = response.data.candidates[0].content.parts[0].text;
           await sendMessage(chatId, replyText);
-        } else {
-          await sendMessage(chatId, "I processed that, but had nothing to say. Try again?");
         }
 
       } catch (error) {
-        // Se der erro, ele ainda te avisa o motivo real
         const errorDetail = error.response?.data?.error?.message || error.message;
+        
+        // Se o erro for "Not Found", vamos tentar forçar o modelo gemini-pro (que é o padrão)
+        if (errorDetail.includes("not found")) {
+           try {
+             const backupUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY.trim()}`;
+             const resBackup = await axios.post(backupUrl, {
+               contents: [{ parts: [{ text: message.text }] }]
+             });
+             return await sendMessage(chatId, resBackup.data.candidates[0].content.parts[0].text);
+           } catch (e) {
+             await sendMessage(chatId, `FINAL ERROR: ${e.message}`);
+           }
+        }
         await sendMessage(chatId, `DEBUG ERROR: ${errorDetail}`);
       }
     }
