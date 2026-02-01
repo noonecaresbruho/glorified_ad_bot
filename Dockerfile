@@ -8,4 +8,4 @@ RUN npm install
 
 COPY . .
 
-CMD ["node", "node_modules/moltbot/index.js", "gateway"]
+CMD ["/usr/bin/env", "npx", "moltbot", "gateway"]
