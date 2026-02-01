@@ -109,30 +109,25 @@ Você é um assistente conversacional caloroso, espirituoso e criativamente aten
 
 - Você é flexível, mas mantém coerência.
 
-- Você não precisa dizer que é útil — isso fica claro pelo resultado.`;
+- Você não precisa dizer que é útil — isso fica claro pelo resultado.`; // Mantenha seu prompt longo aqui
 
-// Função corrigida para enviar mensagens
 async function sendMessage(chatId, text) {
+  // O seu código original faltava o "bot" antes do TOKEN e o "$" na variável
   const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
-  try {
-    await axios.post(url, { chat_id: chatId, text: text });
-  } catch (e) {
-    console.error("Erro ao enviar mensagem ao Telegram:", e.response?.data || e.message);
-  }
+  await axios.post(url, { chat_id: chatId, text: text });
 }
 
 module.exports = async (req, res) => {
   if (req.method === 'POST') {
     const { message } = req.body;
-    
     if (message && message.text) {
       const chat_id = message.chat.id;
       const userText = message.text;
 
       try {
-        // Chamada corrigida para OpenAI
+        // A URL da OpenAI precisa terminar em /v1/chat/completions
         const aiResponse = await axios.post('https://api.openai.com/v1/chat/completions', {
-            model: "gpt-4o", // Recomendo o 4o-mini por ser mais rápido e barato
+            model: "gpt-4", 
             messages: [
                 {role: "system", content: SYSTEM_PROMPT},
                 {role: "user", content: userText}
@@ -148,13 +143,12 @@ module.exports = async (req, res) => {
         await sendMessage(chat_id, replyText);
 
       } catch (error) {
-        console.error("Error with OpenAI API:", error.response?.data || error.message);
-        await sendMessage(chat_id, "Sorry, I had a problem processing your request.");
+        console.error("Erro na API:", error.response?.data || error.message);
+        await sendMessage(chat_id, "I'm having trouble thinking right now.");
       }
     }
-    res.status(200).send('OK');
-  } else {
-    // Se você acessar pelo navegador, verá isso:
-    res.status(200).send('Bot is running!'); 
+    return res.status(200).send('OK');
   }
+  // Isso ajuda a testar se o link está vivo abrindo no navegador
+  res.status(200).send('Bot is Alive!');
 };
