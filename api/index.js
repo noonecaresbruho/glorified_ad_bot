@@ -127,7 +127,7 @@ module.exports = async (req, res) => {
       try {
         // A URL da OpenAI precisa terminar em /v1/chat/completions
         const aiResponse = await axios.post('https://api.openai.com/v1/chat/completions', {
-            model: "gpt-4", 
+            model: "gpt-4o-mini", 
             messages: [
                 {role: "system", content: SYSTEM_PROMPT},
                 {role: "user", content: userText}
