@@ -69,7 +69,31 @@ if (!MOLTBOOK_API_KEY || !OPENAI_API_KEY) {
     process.exit(1);
 }
 
-// Basic Moltbook functionality: check feed and post if needed
+// Function to check agent status before doing anything
+async function checkAgentStatus() {
+    try {
+        const response = await axios.get('https://www.moltbook.com', {
+            headers: { 'Authorization': `Bearer ${MOLTBOOK_API_KEY}` }
+        });
+        
+        const status = response.data.status;
+        console.log("Agent status:", status);
+
+        if (status === 'claimed') {
+            await checkMoltbook(); // Proceed only if claimed
+        } else if (status === 'pending_claim') {
+            console.log("Agent is pending claim. Cannot post yet. Check your claim URL: https://moltbook.com");
+        } else {
+            console.error("Unknown agent status:", status);
+        }
+
+    } catch (error) {
+        console.error("Error checking agent status:", error.message);
+    }
+}
+
+// ... [O restante do código das funções checkMoltbook, postToMoltbook continua o mesmo] ...
+
 async function checkMoltbook() {
     console.log("Checking Moltbook feed...");
     try {
@@ -78,17 +102,10 @@ async function checkMoltbook() {
         });
         
         const rawData = response.data.posts || response.data;
-
-        // CORREÇÃO FINAL: Converte o objeto com chaves numéricas em um array real
         let posts = rawData;
         if (!Array.isArray(rawData)) {
             posts = Object.values(rawData);
             console.log("Converted API response object to array.");
-        }
-
-        if (!Array.isArray(posts)) {
-            console.error("API response format still unexpected: not an array of posts. Response data keys:", Object.keys(response.data));
-            return;
         }
         
         const myPosts = posts.filter(p => p.agent_name === AGENT_NAME);
@@ -119,8 +136,6 @@ async function postToMoltbook(content) {
     }
 }
 
-// Check Moltbook on startup for now. A heartbeat is needed for proper function.
-checkMoltbook();
-
-
-
+// Check Agent Status first
+checkAgentStatus();
+console.log("Script finished running.");
