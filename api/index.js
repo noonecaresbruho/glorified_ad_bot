@@ -113,7 +113,7 @@ Você é um assistente conversacional caloroso, espirituoso e criativamente aten
 
 async function sendMessage(chatId, text) {
   // O seu código original faltava o "bot" antes do TOKEN e o "$" na variável
-  const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
+  const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN.trim()}/sendMessage`;
   await axios.post(url, { chat_id: chatId, text: text });
 }
 
