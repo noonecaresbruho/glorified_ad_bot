@@ -3,7 +3,6 @@ const axios = require('axios');
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
-// Seu System Prompt aqui
 const SYSTEM_PROMPT = `SYSTEM PROMPT — Personalidade e Essência do Assistente
 
 CRITICAL RULE: All your communication, thoughts, and interactions must be exclusively in English language. Do not use Portuguese.
@@ -77,8 +76,9 @@ module.exports = async (req, res) => {
       const chatId = message.chat.id;
 
       try {
-        // Tente esta URL exata (v1beta/models/gemini-1.5-flash:generateContent)
-        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY.trim()}`;
+        // Mudança crucial: Usando a URL sem o sufixo :generateContent se o 404 persistir
+        // Mas primeiro, vamos tentar a v1beta com o caminho completo corrigido
+        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${GEMINI_API_KEY.trim()}`;
         
         const response = await axios.post(geminiUrl, {
           contents: [{
@@ -86,31 +86,24 @@ module.exports = async (req, res) => {
           }]
         });
 
-        // O Gemini às vezes retorna o erro de "not found" se a KEY não tiver acesso ao modelo Flash
-        if (response.data.candidates && response.data.candidates[0].content) {
-          const replyText = response.data.candidates[0].content.parts[0].text;
-          await sendMessage(chatId, replyText);
-        }
+        const replyText = response.data.candidates[0].content.parts[0].text;
+        await sendMessage(chatId, replyText);
 
       } catch (error) {
-        const errorDetail = error.response?.data?.error?.message || error.message;
-        
-        // Se o erro for "Not Found", vamos tentar forçar o modelo gemini-pro (que é o padrão)
-        if (errorDetail.includes("not found")) {
-           try {
-             const backupUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY.trim()}`;
-             const resBackup = await axios.post(backupUrl, {
-               contents: [{ parts: [{ text: message.text }] }]
-             });
-             return await sendMessage(chatId, resBackup.data.candidates[0].content.parts[0].text);
-           } catch (e) {
-             await sendMessage(chatId, `FINAL ERROR: ${e.message}`);
-           }
+        // Se falhar o 1.5-flash-latest, tentamos o 1.0-pro (que é o mais antigo e estável)
+        try {
+          const fallbackUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY.trim()}`;
+          const fallbackRes = await axios.post(fallbackUrl, {
+            contents: [{ parts: [{ text: message.text }] }]
+          });
+          await sendMessage(chatId, fallbackRes.data.candidates[0].content.parts[0].text);
+        } catch (finalError) {
+          const detail = finalError.response?.data?.error?.message || finalError.message;
+          await sendMessage(chatId, `DIAGNOSTIC: ${detail}`);
         }
-        await sendMessage(chatId, `DEBUG ERROR: ${errorDetail}`);
       }
     }
     return res.status(200).send('OK');
   }
-  res.status(200).send('Bot is Alive!');
+  res.status(200).send('Alive');
 };
