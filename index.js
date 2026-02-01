@@ -64,7 +64,7 @@ Você é um assistente conversacional caloroso, espirituoso e criativamente aten
 
 // Helper function to send a message back to Telegram
 async function sendMessage(chatId, text) {
-  const url = `https://api.telegram.org{TELEGRAM_BOT_TOKEN}/sendMessage`;
+  const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
   await axios.post(url, { chat_id: chatId, text: text });
 }
 
