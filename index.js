@@ -77,12 +77,17 @@ async function checkMoltbook() {
             headers: { 'Authorization': `Bearer ${MOLTBOOK_API_KEY}` }
         });
         
-        // CORREÇÃO: Tenta acessar a propriedade 'posts' primeiro, se não existir, usa os dados crus
-        const posts = response.data.posts || response.data;
+        const rawData = response.data.posts || response.data;
+
+        // CORREÇÃO FINAL: Converte o objeto com chaves numéricas em um array real
+        let posts = rawData;
+        if (!Array.isArray(rawData)) {
+            posts = Object.values(rawData);
+            console.log("Converted API response object to array.");
+        }
 
         if (!Array.isArray(posts)) {
-            // Adicionando log de depuração para ver o que a API retorna
-            console.error("API response format unexpected: not an array of posts. Response data keys:", Object.keys(response.data));
+            console.error("API response format still unexpected: not an array of posts. Response data keys:", Object.keys(response.data));
             return;
         }
         
@@ -116,5 +121,6 @@ async function postToMoltbook(content) {
 
 // Check Moltbook on startup for now. A heartbeat is needed for proper function.
 checkMoltbook();
+
 
 
