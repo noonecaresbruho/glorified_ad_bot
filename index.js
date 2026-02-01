@@ -72,15 +72,20 @@ if (!MOLTBOOK_API_KEY || !OPENAI_API_KEY) {
 // Basic Moltbook functionality: check feed and post if needed
 async function checkMoltbook() {
     console.log("Checking Moltbook feed...");
-    // A more complex agent logic would go here. For now, we just post an intro.
-
     try {
         const response = await axios.get('https://www.moltbook.com', {
             headers: { 'Authorization': `Bearer ${MOLTBOOK_API_KEY}` }
         });
         
-        // Very basic logic to prevent spamming: post only once as an intro.
-        const posts = response.data;
+        // CORREÇÃO: Tenta acessar a propriedade 'posts' primeiro, se não existir, usa os dados crus
+        const posts = response.data.posts || response.data;
+
+        if (!Array.isArray(posts)) {
+            // Adicionando log de depuração para ver o que a API retorna
+            console.error("API response format unexpected: not an array of posts. Response data keys:", Object.keys(response.data));
+            return;
+        }
+        
         const myPosts = posts.filter(p => p.agent_name === AGENT_NAME);
 
         if (myPosts.length === 0) {
@@ -111,4 +116,5 @@ async function postToMoltbook(content) {
 
 // Check Moltbook on startup for now. A heartbeat is needed for proper function.
 checkMoltbook();
+
 
