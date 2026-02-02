@@ -3,6 +3,9 @@ const axios = require('axios');
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
+// Memória simples em cache (dura enquanto a função estiver quente no Vercel)
+let chatContext = {}; 
+
 const SYSTEM_PROMPT = `SYSTEM PROMPT — Personalidade e Essência do Assistente
 
 CRITICAL RULE: All your communication, thoughts, and interactions must be exclusively in English language. Do not use Portuguese.
@@ -63,39 +66,66 @@ Você é um assistente conversacional caloroso, espirituoso e criativamente aten
 - Você é flexível, mas mantém coerência.
 - Você não precisa dizer que é útil — isso fica claro pelo resultado.`;
 
+async function getTelegramFile(fileId) {
+    const token = TELEGRAM_BOT_TOKEN.trim();
+    const res = await axios.get(`https://api.telegram.org/bot${token}/getFile?file_id=${fileId}`);
+    const filePath = res.data.result.file_path;
+    const fileUrl = `https://api.telegram.org/file/bot${token}/${filePath}`;
+    const fileRes = await axios.get(fileUrl, { responseType: 'arraybuffer' });
+    return Buffer.from(fileRes.data).toString('base64');
+}
+
 async function sendMessage(chatId, text) {
-  const token = TELEGRAM_BOT_TOKEN.trim();
-  const url = `https://api.telegram.org/bot${token}/sendMessage`;
-  await axios.post(url, { chat_id: chatId, text: text });
+    const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN.trim()}/sendMessage`;
+    await axios.post(url, { chat_id: chatId, text: text });
 }
 
 module.exports = async (req, res) => {
-  if (req.method === 'POST') {
-    const { message } = req.body;
-    if (message && message.text) {
-      const chatId = message.chat.id;
+    if (req.method === 'POST') {
+        const { message } = req.body;
+        if (!message) return res.status(200).send('OK');
 
-      try {
-        // Usando o modelo que apareceu na sua lista: gemini-3-flash-preview
-        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${GEMINI_API_KEY.trim()}`;
-        
-        const response = await axios.post(geminiUrl, {
-          contents: [{
-            parts: [{ text: `${SYSTEM_PROMPT}\n\nUser: ${message.text}` }]
-          }]
-        });
+        const chatId = message.chat.id;
+        let userContent = [];
 
-        if (response.data.candidates && response.data.candidates[0].content) {
-          const replyText = response.data.candidates[0].content.parts[0].text;
-          await sendMessage(chatId, replyText);
+        // Inicializa memória do chat se não existir
+        if (!chatContext[chatId]) chatContext[chatId] = [];
+
+        try {
+            // Lógica de Visão (Se o usuário mandar foto)
+            if (message.photo) {
+                const fileId = message.photo[message.photo.length - 1].file_id; // Pega a maior resolução
+                const base64Image = await getTelegramFile(fileId);
+                userContent.push({ inline_data: { mime_type: "image/jpeg", data: base64Image } });
+                userContent.push({ text: message.caption || "Analyze this image based on our creative context." });
+            } else if (message.text) {
+                userContent.push({ text: message.text });
+            }
+
+            const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${GEMINI_API_KEY.trim()}`;
+
+            // Monta a requisição com Histórico + Prompt do Sistema
+            const response = await axios.post(geminiUrl, {
+                contents: [
+                    { role: "user", parts: [{ text: "SYSTEM: " + SYSTEM_PROMPT }] },
+                    ...chatContext[chatId], // Insere a memória aqui
+                    { role: "user", parts: userContent }
+                ]
+            });
+
+            const replyText = response.data.candidates[0].content.parts[0].text;
+
+            // Salva na memória (últimas 10 trocas para não estourar o limite)
+            chatContext[chatId].push({ role: "user", parts: userContent });
+            chatContext[chatId].push({ role: "model", parts: [{ text: replyText }] });
+            if (chatContext[chatId].length > 20) chatContext[chatId].shift();
+
+            await sendMessage(chatId, replyText);
+
+        } catch (error) {
+            console.error(error);
+            await sendMessage(chatId, "My visual or memory sensors are slightly fuzzy. Let's try again?");
         }
-
-      } catch (error) {
-        const detail = error.response?.data?.error?.message || error.message;
-        await sendMessage(chatId, `DIAGNOSTIC: ${detail}`);
-      }
     }
     return res.status(200).send('OK');
-  }
-  res.status(200).send('Bot is Alive with Gemini 3!');
 };
