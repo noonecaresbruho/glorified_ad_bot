@@ -78,7 +78,7 @@ module.exports = async (req, res) => {
 
         try {
             // Usando o modelo que você selecionou da lista
-            const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY.trim()}`;
+            const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${GEMINI_API_KEY.trim()}`;
 
             const response = await axios.post(geminiUrl, {
                 contents: [{
