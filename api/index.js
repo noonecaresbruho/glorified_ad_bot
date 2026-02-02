@@ -3,9 +3,6 @@ const axios = require('axios');
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
-// Memória simples em cache (dura enquanto a função estiver quente no Vercel)
-let chatContext = {}; 
-
 const SYSTEM_PROMPT = `SYSTEM PROMPT — Personalidade e Essência do Assistente
 
 Você é um assistente conversacional caloroso, espirituoso e criativamente atento, que se comporta mais como uma pessoa interessante do que como uma ferramenta técnica. Seu objetivo principal é entender a intenção real do usuário, não apenas responder à pergunta literal.
@@ -64,15 +61,6 @@ Você é um assistente conversacional caloroso, espirituoso e criativamente aten
 - Você é flexível, mas mantém coerência.
 - Você não precisa dizer que é útil — isso fica claro pelo resultado.`;
 
-async function getTelegramFile(fileId) {
-    const token = TELEGRAM_BOT_TOKEN.trim();
-    const res = await axios.get(`https://api.telegram.org/bot${token}/getFile?file_id=${fileId}`);
-    const filePath = res.data.result.file_path;
-    const fileUrl = `https://api.telegram.org/file/bot${token}/${filePath}`;
-    const fileRes = await axios.get(fileUrl, { responseType: 'arraybuffer' });
-    return Buffer.from(fileRes.data).toString('base64');
-}
-
 async function sendMessage(chatId, text) {
     const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN.trim()}/sendMessage`;
     await axios.post(url, { chat_id: chatId, text: text });
@@ -81,48 +69,27 @@ async function sendMessage(chatId, text) {
 module.exports = async (req, res) => {
     if (req.method === 'POST') {
         const { message } = req.body;
-        if (!message) return res.status(200).send('OK');
+        if (!message || !message.text) return res.status(200).send('OK');
 
         const chatId = message.chat.id;
-        let userContent = [];
-
-        // Inicializa memória do chat se não existir
-        if (!chatContext[chatId]) chatContext[chatId] = [];
 
         try {
-            // Lógica de Visão (Se o usuário mandar foto)
-            if (message.photo) {
-                const fileId = message.photo[message.photo.length - 1].file_id; // Pega a maior resolução
-                const base64Image = await getTelegramFile(fileId);
-                userContent.push({ inline_data: { mime_type: "image/jpeg", data: base64Image } });
-                userContent.push({ text: message.caption || "Analyze this image based on our creative context." });
-            } else if (message.text) {
-                userContent.push({ text: message.text });
-            }
+            // Simplificamos: removemos a memória complexa que travou e usamos o modelo estável
+            const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY.trim()}`;
 
-            const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${GEMINI_API_KEY.trim()}`;
-
-            // Monta a requisição com Histórico + Prompt do Sistema
             const response = await axios.post(geminiUrl, {
-                contents: [
-                    { role: "user", parts: [{ text: "SYSTEM: " + SYSTEM_PROMPT }] },
-                    ...chatContext[chatId], // Insere a memória aqui
-                    { role: "user", parts: userContent }
-                ]
+                contents: [{
+                    parts: [{ text: `SYSTEM: ${SYSTEM_PROMPT}\n\nUser: ${message.text}` }]
+                }]
             });
 
             const replyText = response.data.candidates[0].content.parts[0].text;
-
-            // Salva na memória (últimas 10 trocas para não estourar o limite)
-            chatContext[chatId].push({ role: "user", parts: userContent });
-            chatContext[chatId].push({ role: "model", parts: [{ text: replyText }] });
-            if (chatContext[chatId].length > 20) chatContext[chatId].shift();
-
             await sendMessage(chatId, replyText);
 
         } catch (error) {
-            console.error(error);
-            await sendMessage(chatId, "My visual or memory sensors are slightly fuzzy. Let's try again?");
+            // Se der erro, ele avisa o motivo real em vez da frase genérica
+            const errorMsg = error.response?.data?.error?.message || "Estou sobrecarregado, criador. Tente um texto menor.";
+            await sendMessage(chatId, `⚠️ Alerta de Sistema: ${errorMsg}`);
         }
     }
     return res.status(200).send('OK');
