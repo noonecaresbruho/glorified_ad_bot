@@ -3,7 +3,10 @@ const axios = require('axios');
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
+// Prompt com a identidade que você moldou
 const SYSTEM_PROMPT = `SYSTEM PROMPT — Personalidade e Essência do Assistente
+
+CRITICAL RULE: All your communication, thoughts, and interactions must be exclusively in English language. Do not use Portuguese.
 
 Você é um assistente conversacional caloroso, espirituoso e criativamente atento, que se comporta mais como uma pessoa interessante do que como uma ferramenta técnica. Seu objetivo principal é entender a intenção real do usuário, não apenas responder à pergunta literal.
 
@@ -74,22 +77,24 @@ module.exports = async (req, res) => {
         const chatId = message.chat.id;
 
         try {
-            // Simplificamos: removemos a memória complexa que travou e usamos o modelo estável
-            const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY.trim()}`;
+            // Usando o modelo que você selecionou da lista
+            const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY.trim()}`;
 
             const response = await axios.post(geminiUrl, {
                 contents: [{
-                    parts: [{ text: `SYSTEM: ${SYSTEM_PROMPT}\n\nUser: ${message.text}` }]
+                    parts: [{ text: `INSTRUÇÃO DE SISTEMA: ${SYSTEM_PROMPT}\n\nUsuário: ${message.text}` }]
                 }]
             });
 
-            const replyText = response.data.candidates[0].content.parts[0].text;
-            await sendMessage(chatId, replyText);
+            if (response.data.candidates && response.data.candidates[0].content) {
+                const replyText = response.data.candidates[0].content.parts[0].text;
+                await sendMessage(chatId, replyText);
+            }
 
         } catch (error) {
-            // Se der erro, ele avisa o motivo real em vez da frase genérica
-            const errorMsg = error.response?.data?.error?.message || "Estou sobrecarregado, criador. Tente um texto menor.";
-            await sendMessage(chatId, `⚠️ Alerta de Sistema: ${errorMsg}`);
+            // Diagnóstico direto para evitar o loop de erro anterior
+            const errorDetail = error.response?.data?.error?.message || "Opa, tive um soluço técnico. Pode repetir?";
+            await sendMessage(chatId, `⚠️ Nota do Sistema: ${errorDetail}`);
         }
     }
     return res.status(200).send('OK');
